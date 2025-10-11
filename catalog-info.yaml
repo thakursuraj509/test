@@ -1,0 +1,28 @@
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: "suraj" # dump: convert data types (objects/arrays) into yaml compatible string format
+  description: Stores backstage details
+  tags:
+    - java
+  links:
+    - url: https://github.com
+      title: Admin Dashboard
+      icon: dashboard
+      type: admin-dashboard
+spec:
+  type: database # s3-bucket, kubernetes-cluster [REQUIRED]
+  owner: user:default/suraj # Group/Users [REQUIRED]
+  lifecycle: experimental # production, deprecated [REQUIRED]
+  # system: public-websites # System
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: "suraj"
+spec:
+  type: service
+  owner: user:default/suraj
+  lifecycle: experimental
+  dependsOn: 
+    - "resource:suraj"
