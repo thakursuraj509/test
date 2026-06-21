@@ -98,7 +98,30 @@ graph TD
     
     H -. "Query/Alerting \n Mimir(8080)/Loki(80) \n Tempo(3100)/Pyroscope(4040)" .-> C & D & E & F
 ```
+-----------------------------------------------------
 
+### Add Cache Tiers (Production Optimization)The Issue: Fetching log lines or metric logs straight from AWS S3 buckets every time an engineer opens a Grafana dashboard introduces high query latency and increases AWS S3 read API costs.
+
+```mermaid
+graph LR
+    %% Define Highly Visible High-Contrast Bright Colors
+    classDef client fill:#D0FFFF,stroke:#00A0A0,stroke-width:3px,color:#000000;
+    classDef engine fill:#FF9100,stroke:#BF360C,stroke-width:4px,color:#FFFFFF;
+    classDef cache fill:#FFFF00,stroke:#F57F17,stroke-width:4px,color:#000000;
+    classDef storage fill:#00E676,stroke:#1B5E20,stroke-width:4px,color:#000000;
+
+    A["`**Grafana UI / Users**`"]
+    B["`**Mimir / Loki Queriers**`"]
+    C["`⚡ **AWS ElastiCache**`"]
+    D["`📦 **AWS S3 Buckets**(Cold Blocks)`"]
+
+    class A client; class B engine; class C cache; class D storage;
+
+    A == "1. Request Query" ==> B
+    B -. "2. Check In-Memory Cache" .-> C
+    B == "3. Miss - Fetch Object Chunks" ==> D
+    B -. "4. Populate Cache" .-> C
+```
 
 
 ### 📋 Operational Workflow Steps
@@ -461,8 +484,27 @@ global:
     tag: 2.14.0
 
 mimir:
-  config:
+  config/structuredConfig:
+    memberlist:
+      # Targets the internal headless DNS ring service auto-managed by the chart
+      join_members:
+        - mimir-distributed-memberlist.monitoring.svc.cluster.local:7946
     blocks_storage:
+      bucket_store:
+        # 1. Enable Metadata Index Caching
+        index_cache:
+          backend: memcached
+          memcached:
+            addresses: "://amazonaws.com"
+            timeout: 500ms
+            max_idle_conns: 100
+        # 2. Enable Chunk Storage Block Cache
+        chunks_cache:
+          backend: memcached
+          memcached:
+            addresses: "://amazonaws.com"
+            timeout: 500ms
+            max_idle_conns: 100
       backend: s3
       s3:
         endpoint: s3.us-east-1.amazonaws.com
@@ -474,7 +516,14 @@ mimir:
         endpoint: s3.us-east-1.amazonaws.com
         bucket_name: "eks-observability-mimir-alertmanager-placeholder"
         region: "us-east-1"
-
+    # 3. Enable Full Raw Query Results Cache
+    query_frontend:
+      results_cache:
+        backend: memcached
+        memcached:
+          addresses: "://amazonaws.com"
+          timeout: 500ms
+          max_idle_conns: 100
 minio:
   enabled: false
 
@@ -542,8 +591,34 @@ global:
     registry: ://example.com
     repository: observability-mirror/loki
     tag: 3.0.0
+
 deploymentMode: Distributed
+
 loki:
+  structuredConfig:
+    memberlist:
+      # Targets the headless gossip mesh internal DNS routing path
+      join_members:
+        - loki-memberlist.monitoring.svc.cluster.local:7946
+    # 1. Enable Index Object Caching
+    index_queries_cache_config:
+      memcached:
+        addresses: "://amazonaws.com"
+        timeout: 500ms
+    
+    # 2. Enable Chunk Results Cache
+    chunks_cache_config:
+      memcached:
+        addresses: "://amazonaws.com"
+        timeout: 500ms
+
+    # 3. Enable Split Frontend Query Performance Tracking Cache
+    frontend:
+      results_cache:
+        cache:
+          memcached:
+            addresses: "://amazonaws.com"
+            timeout: 500ms
   auth_enabled: false
   storage:
     type: s3
@@ -553,24 +628,31 @@ loki:
       region: "us-east-1"
   limits_config:
     retention_period: 30d
+
 serviceAccount:
   create: true
   name: loki-distributed
   annotations:
     eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/eks-placeholder-logs-s3-role"
+
 ingester:
   replicas: 3
   persistence:
     size: 20Gi
-    storageClass: gp3distributor:
-  replicas: 3querier:
-  replicas: 3queryFrontend:
-  replicas: 2gateway:
+    storageClass: gp3
+distributor:
+  replicas: 3
+querier:
+  replicas: 3
+queryFrontend:
+  replicas: 2
+gateway:
   enabled: true
   deployment:
     image:
       registry: ://example.com
       repository: observability-mirror/nginx
+
 ```
 ------------------------------
 # argocd-apps/app-loki.yaml
@@ -603,11 +685,18 @@ spec:
 
 * Registry Source: grafana-community/tempo-distributed
 ```
+tempo:
+  config:
+    memberlist:
+      # Targets the headless trace state management token mesh
+      join_members:
+        - tempo-distributed-memberlist.monitoring.svc.cluster.local:7946
 global:
   image:
     registry: ://example.com
     repository: observability-mirror/tempo
     tag: 2.4.1
+
 meta:
   config:
     storage:
@@ -616,18 +705,25 @@ meta:
         s3:
           bucket_name: "eks-observability-tempo-traces-placeholder"
           region: "us-east-1"
+
 serviceAccount:
   create: true
   annotations:
     eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/eks-placeholder-traces-s3-role"
+
 distributor:
-  replicas: 2ingester:
+  replicas: 2
+ingester:
   replicas: 3
   persistence:
     size: 10Gi
-    storageClass: gp3querier:
-  replicas: 2queryFrontend:
+    storageClass: gp3
+querier:
   replicas: 2
+queryFrontend:
+  replicas: 2
+
+
 ```
 ------------------------------
 # argocd-apps/app-tempo.yaml
@@ -665,6 +761,7 @@ global:
     registry: ://example.com
     repository: observability-mirror/pyroscope
     tag: 1.4.0
+
 pyroscope:
   config:
     storage:
@@ -673,17 +770,23 @@ pyroscope:
         endpoint: s3.us-east-1.amazonaws.com
         bucket_name: "eks-observability-pyroscope-profiles-placeholder"
         region: "us-east-1"
-# Route execution permissions explicitly to profile bucketsserviceAccount:
+
+# Route execution permissions explicitly to profile buckets
+serviceAccount:
   create: true
   annotations:
     eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/eks-placeholder-profiles-s3-role"
+
 distributor:
-  replicas: 2ingester:
+  replicas: 2
+ingester:
   replicas: 3
   persistence:
     size: 15Gi
-    storageClass: gp3querier:
+    storageClass: gp3
+querier:
   replicas: 2
+
 ```
 ------------------------------
 # argocd-apps/app-pyroscope.yaml
@@ -715,7 +818,54 @@ spec:
 Integrated directly with Mimir, Loki, Tempo, and Pyroscope database discovery strings. [2] 
 
 * Registry Source: grafana-community/grafana [7] 
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "GrafanaDatabaseSecretAccess",
+            "Effect": "Allow",
+            "Action": [
+                "secretsmanager:GetSecretValue",
+                "secretsmanager:DescribeSecret"
+            ],
+            "Resource": "arn:aws:secretsmanager:us-east-1:123456789012:secret:prod-grafana-aurora-creds-??????"
+        }
+    ]
+}
+---
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowEksGrafanaPodToAssumeRole",
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "arn:aws:iam::123456789012:oidc-provider/://amazonaws.com"
+      },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringEquals": {
+          "://amazonaws.com:sub": "system:serviceaccount:monitoring:grafana",
+          "://amazonaws.com:aud": "sts.amazonaws.com"
+        }
+      }
+    }
+  ]
+}
+
+
 ```
+# Scale the UI out to 2 replicas for Multi-AZ High Availability
+replicas: 2 
+
+# Ensure pods are spread evenly across distinct AWS Availability Zones
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: "topology.kubernetes.io/zone"
+    whenUnsatisfiable: "ScheduleAnyway"
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: grafana
 image:
   registry: ://example.com
   repository: observability-mirror/grafana
@@ -729,10 +879,40 @@ adminPassword: "YourHighlySecureProductionPasswordPlaceholder"
 env:
   GF_AUTH_ANONYMOUS_ENABLED: "false"
 
-# ==============================================================================
-# 1. CORE SMTP SERVER CONFIGURATION (Enables email dispatching)
-# ==============================================================================
+# 1. Attach your AWS IRSA Role ARN directly to the Grafana Pod ServiceAccount
+serviceAccount:
+  create: true
+  name: grafana
+  annotations:
+    ://amazonaws.com: "arn:aws:iam::123456789012:role/eks-grafana-secrets-manager-role"
+
+# 2. Inject the password into the pod environment securely from the mapped Secret
+envFromSecret:
+  - secretRef:
+      name: aurora-db-secret 
+
 grafana.ini:
+  # CREATE DATABASE grafana_metadata_prod;
+  # CRITICAL PRODUCTION PERSISTENCE SWITCH (OFFLOAD LOCAL STATE)
+  database:
+    type: postgres
+    # 1. Target your Aurora PostgreSQL Cluster Writer Endpoint
+    host: "://amazonaws.com"
+    name: "grafana_metadata_prod"
+    user: "grafana_db_admin"
+    password: "$__env{DATABASE_PASSWORD}" 
+    # 2. Enforce explicit TLS encryption for cloud network compliance
+    ssl_mode: "require"
+    
+  # Optimize connection pools to prevent exhausting Aurora database limits
+  database.connection_pool:
+    max_open_conn: 30
+    max_idle_conn: 10
+    conn_max_lifetime: 14400 # Close connections after 4 hours to avoid stale sockets
+
+  # ==============================================================================
+  # 1. CORE SMTP SERVER CONFIGURATION (Enables email dispatching)
+  # ==============================================================================
   smtp:
     enabled: true
     host: "://example.com"              # Replace with your internal or cloud SMTP relay
@@ -919,6 +1099,25 @@ alloy:
   
   clustering:
     enabled: true # Balance processing workloads natively across cluster node lines
+
+  rbac:
+    create: true # Auto-provisions ClusterRole and ClusterRoleBinding for pod discovery
+  
+  securityContext:
+    runAsUser: 0
+    runAsGroup: 0
+    privileged: true # Required for eBPF Pyroscope network profiling on EKS nodes
+
+  # Mount the host log path into the container space securely
+  extraPorts:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+      protocol: TCP
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+      protocol: TCP
 
   # ==============================================================================
   # DECLARATIVE RIVER RUNTIME PIPELINE CONFIGURATION
