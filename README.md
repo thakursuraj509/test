@@ -46,58 +46,59 @@ Instead of running three different legacy agents (like Fluent Bit, Prometheus Ag
 
 ```mermaid
 graph TD
-    %% Define Styles & Layout Settings
-    classDef app fill:#f9f9f9,stroke:#333,stroke-width:2px;
-    classDef agent fill:#e1f5fe,stroke:#0288d1,stroke-width:2px;
-    classDef backend fill:#fff3e0,stroke:#f57c00,stroke-width:2px;
-    classDef storage fill:#efebe9,stroke:#5d4037,stroke-width:2px,stroke-dasharray: 5 5;
-    classDef ui fill:#e8f5e9,stroke:#388e3c,stroke-width:2px;
+    %% Define Highly Visible High-Contrast Bright Colors
+    classDef app fill:#D0FFFF,stroke:#00A0A0,stroke-width:3px;
+    classDef agent fill:#00E5FF,stroke:#006064,stroke-width:4px;
+    classDef backend fill:#FF9100,stroke:#BF360C,stroke-width:4px;
+    classDef storage fill:#FFFF00,stroke:#F57F17,stroke-width:4px;
+    classDef ui fill:#00E676,stroke:#1B5E20,stroke-width:4px;
 
     %% --- 1. APPLICATION LAYER ---
-    subgraph AppLayer [EKS Cluster Application Pods]
-        A[Microservices & Node Runtimes]
+    subgraph AppLayer ["<span style='font-size:18px'><b>EKS WORKLOADS</b></span>"]
+        A["<span style='font-size:16px'><b>Application Pods & Microservices</b></span>"]
     end
     class A app;
 
     %% --- 2. COLLECTION LAYER ---
-    subgraph CollectionLayer [Unified Telemetry Agent]
-        B[Grafana Alloy DaemonSet]
+    subgraph CollectionLayer ["<span style='font-size:18px'><b>COLLECTION LAYER</b></span>"]
+        B["<span style='font-size:18px'><b>GRAFANA ALLOY DAEMONSET</b></span>"]
     end
     class B agent;
 
     %% --- 3. STORAGE & PROCESSING BACKENDS ---
-    subgraph ProcessingLayer [Distributed Storage Backends]
-        C[Grafana Mimir <br> <b>Metrics</b>]
-        D[Grafana Loki <br> <b>Logs</b>]
-        E[Grafana Tempo <br> <b>Traces</b>]
-        F[Grafana Pyroscope <br> <b>Profiles</b>]
+    subgraph ProcessingLayer ["<span style='font-size:18px'><b>DISTRIBUTED PROCESSING ENGINES</b></span>"]
+        C["<span style='font-size:16px'><b>GRAFANA MIMIR <br> (METRICS)</b></span>"]
+        D["<span style='font-size:16px'><b>GRAFANA LOKI <br> (LOGS)</b></span>"]
+        E["<span style='font-size:16px'><b>GRAFANA TEMPO <br> (TRACES)</b></span>"]
+        F["<span style='font-size:16px'><b>GRAFANA PYROSCOPE <br> (PROFILES)</b></span>"]
     end
     class C,D,E,F backend;
 
     %% --- 4. COLD STORAGE ---
-    subgraph StorageLayer [Cloud Object Storage]
-        G[(AWS S3 Buckets)]
+    subgraph StorageLayer ["<span style='font-size:18px'><b>PERSISTENT STORAGE</b></span>"]
+        G["<span style='font-size:18px'><b>AWS S3 BUCKETS</b></span>"]
     end
     class G storage;
 
     %% --- 5. VISUALIZATION LAYER ---
-    subgraph VisualizationLayer [Control & Analytics Panel]
-        H[Grafana UI Dashboards]
+    subgraph VisualizationLayer ["<span style='font-size:18px'><b>USER INTERFACE</b></span>"]
+        H["<span style='font-size:18px'><b>GRAFANA UI CONTROL PANEL</b></span>"]
     end
     class H ui;
 
     %% --- PIPELINE CONNECTIONS (FLOW) ---
-    A -->|Exposes Telemetry| B
+    A == Exposes Telemetry ==> B
     
-    B -->|Streams Metrics| C
-    B -->|Streams Logs| D
-    B -->|Streams Traces| E
-    B -->|Streams Profiles| F
+    B == Streams Metrics ==> C
+    B == Streams Logs ==> D
+    B == Streams Traces ==> E
+    B == Streams Profiles ==> F
     
-    C & D & E & F -->|Flushes Cold Blocks| G
+    C & D & E & F == Flushes Cold Blocks ==> G
     
-    H -.->|Queries Data & Evaluates Alerts| C & D & E & F
+    H -. Queries Data & Evaluates Alerts .-> C & D & E & F
 ```
+
 
 ### 📋 Operational Workflow Steps
 1. **Grafana Alloy** runs as a high-performance `DaemonSet` across all EKS worker nodes.
