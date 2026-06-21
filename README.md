@@ -46,43 +46,43 @@ Instead of running three different legacy agents (like Fluent Bit, Prometheus Ag
 
 ```mermaid
 graph TD
-    %% Define High-Contrast, Vivid Colors with Overridden Text Styles
-    classDef app fill:#E0F7FA,stroke:#00ACC1,stroke-width:3px,color:#004D40,font-weight:bold,font-size:16px;
-    classDef agent fill:#00E5FF,stroke:#006064,stroke-width:4px,color:#000000,font-weight:bold,font-size:18px;
-    classDef backend fill:#FF9100,stroke:#BF360C,stroke-width:4px,color:#FFFFFF,font-weight:bold,font-size:16px;
-    classDef storage fill:#FFEA00,stroke:#F57F17,stroke-width:4px,color:#000000,font-weight:bold,font-size:18px;
-    classDef ui fill:#00E676,stroke:#1B5E20,stroke-width:4px,color:#000000,font-weight:bold,font-size:18px;
+    %% Define Highly Visible High-Contrast Bright Colors
+    classDef app fill:#D0FFFF,stroke:#00A0A0,stroke-width:3px,color:#000000;
+    classDef agent fill:#00E5FF,stroke:#006064,stroke-width:4px,color:#000000;
+    classDef backend fill:#FF9100,stroke:#BF360C,stroke-width:4px,color:#FFFFFF;
+    classDef storage fill:#FFFF00,stroke:#F57F17,stroke-width:4px,color:#000000;
+    classDef ui fill:#00E676,stroke:#1B5E20,stroke-width:4px,color:#000000;
 
     %% --- 1. APPLICATION LAYER ---
     subgraph AppLayer [EKS WORKLOADS]
-        A["**Application Pods & Microservices**"]
+        A["`**Application Pods & Microservices**`"]
     end
     class A app;
 
     %% --- 2. COLLECTION LAYER ---
     subgraph CollectionLayer [COLLECTION LAYER]
-        B["**GRAFANA ALLOY DAEMONSET**"]
+        B["`**GRAFANA ALLOY DAEMONSET**`"]
     end
     class B agent;
 
     %% --- 3. STORAGE & PROCESSING BACKENDS ---
     subgraph ProcessingLayer [DISTRIBUTED PROCESSING ENGINES]
-        C["**GRAFANA MIMIR\n(METRICS)**"]
-        D["**GRAFANA LOKI\n(LOGS)**"]
-        E["**GRAFANA TEMPO\n(TRACES)**"]
-        F["**GRAFANA PYROSCOPE\n(PROFILES)**"]
+        C["`**GRAFANA MIMIR**\n**(METRICS)**`"]
+        D["`**GRAFANA LOKI**\n**(LOGS)**`"]
+        E["`**GRAFANA TEMPO**\n**(TRACES)**`"]
+        F["`**GRAFANA PYROSCOPE**\n**(PROFILES)**`"]
     end
     class C,D,E,F backend;
 
     %% --- 4. COLD STORAGE ---
     subgraph StorageLayer [PERSISTENT STORAGE]
-        G["**AWS S3 BUCKETS**"]
+        G["`**AWS S3 BUCKETS**`"]
     end
     class G storage;
 
     %% --- 5. VISUALIZATION LAYER ---
     subgraph VisualizationLayer [USER INTERFACE]
-        H["**GRAFANA UI CONTROL PANEL**"]
+        H["`**GRAFANA UI CONTROL PANEL**`"]
     end
     class H ui;
 
