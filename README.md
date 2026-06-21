@@ -96,7 +96,7 @@ graph TD
     
     C & D & E & F == "S3 API (443)" ==> G
     
-    H -. "Query/Alerting \n Mimir(8080)/Loki(80) \n Tempo(3100)/Pyroscope(4040)" .-> C & D & E & F
+    H -. "Query/Alerting\nMimir(8080)/Loki(80)\nTempo(3100)/\nPyroscope(4040)" .-> C & D & E & F
 ```
 -----------------------------------------------------
 
