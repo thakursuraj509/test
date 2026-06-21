@@ -46,83 +46,83 @@ Instead of running three different legacy agents (like Fluent Bit, Prometheus Ag
 
 ```mermaid
 graph TD
-    %% Define High-Contrast, Vivid Colors with Overridden Text Styles
-    classDef app fill:#E0F7FA,stroke:#00ACC1,stroke-width:3px,color:#004D40,font-weight:bold,font-size:16px;
-    classDef agent fill:#00E5FF,stroke:#006064,stroke-width:4px,color:#000000,font-weight:bold,font-size:18px;
-    classDef backend fill:#FF9100,stroke:#BF360C,stroke-width:4px,color:#FFFFFF,font-weight:bold,font-size:16px;
-    classDef storage fill:#FFEA00,stroke:#F57F17,stroke-width:4px,color:#000000,font-weight:bold,font-size:18px;
-    classDef ui fill:#00E676,stroke:#1B5E20,stroke-width:4px,color:#000000,font-weight:bold,font-size:18px;
+    %% Define Bright Neon High-Contrast Theme with Enlarged Bold Fonts
+    classDef app fill:#E0FFFF,stroke:#00E5FF,stroke-width:4px,color:#000000,font-weight:bold,font-size:18px;
+    classDef agent fill:#00E5FF,stroke:#006064,stroke-width:4px,color:#000000,font-weight:bold,font-size:20px;
+    classDef backend fill:#FF9100,stroke:#BF360C,stroke-width:4px,color:#FFFFFF,font-weight:bold,font-size:18px;
+    classDef cache fill:#FFFF00,stroke:#F57F17,stroke-width:4px,color:#000000,font-weight:bold,font-size:18px;
+    classDef storage fill:#00E676,stroke:#1B5E20,stroke-width:4px,color:#000000,font-weight:bold,font-size:18px;
+    classDef ui fill:#CCFF90,stroke:#33691E,stroke-width:4px,color:#000000,font-weight:bold,font-size:20px;
+    classDef aurora fill:#E1BEE7,stroke:#4A148C,stroke-width:4px,color:#000000,font-weight:bold,font-size:18px;
 
     %% --- 1. APPLICATION LAYER ---
     subgraph AppLayer [EKS WORKLOADS]
-        A["Application Pods & Microservices"]
+        A["Application Pods and Microservices"]
     end
     class A app;
 
     %% --- 2. COLLECTION LAYER ---
     subgraph CollectionLayer [COLLECTION LAYER]
-        B["GRAFANA ALLOY\nDAEMONSET"]
+        B["GRAFANA ALLOY DAEMONSET"]
     end
     class B agent;
 
     %% --- 3. STORAGE & PROCESSING BACKENDS ---
     subgraph ProcessingLayer [DISTRIBUTED PROCESSING ENGINES]
-        C["GRAFANA MIMIR\n(METRICS)"]
-        D["GRAFANA LOKI\n(LOGS)"]
-        E["GRAFANA TEMPO\n(TRACES)"]
-        F["GRAFANA PYROSCOPE\n(PROFILES)"]
+        C["GRAFANA MIMIR METRICS"]
+        D["GRAFANA LOKI LOGS"]
+        E["GRAFANA TEMPO TRACES"]
+        F["GRAFANA PYROSCOPE PROFILES"]
     end
     class C,D,E,F backend;
 
-    %% --- 4. COLD STORAGE ---
-    subgraph StorageLayer [PERSISTENT STORAGE]
+    %% --- 4. ACCELERATION LAYER (CACHING) ---
+    subgraph CacheLayer [FAST MEMORY ACCELERATION]
+        CH["AWS ElastiCache Memcached Cluster"]
+    end
+    class CH cache;
+
+    %% --- 5. COLD STORAGE ---
+    subgraph StorageLayer [PERSISTENT COLD STORAGE]
         G["AWS S3 BUCKETS"]
     end
     class G storage;
 
-    %% --- 5. VISUALIZATION LAYER ---
-    subgraph VisualizationLayer [USER INTERFACE]
-        H["GRAFANA UI\nCONTROL PANEL"]
+    %% --- 6. VISUALIZATION LAYER ---
+    subgraph VisualizationLayer [USER CONTROL PANEL]
+        H["GRAFANA UI CONTROL PANEL"]
     end
     class H ui;
 
-    %% --- PIPELINE CONNECTIONS (FLOW) ---
-    A == "OTLP (4317/4318) \n HTTP (/metrics)" ==> B
+    %% --- 7. METADATA LAYER ---
+    subgraph MetadataLayer [RELATIONAL METADATA STORAGE]
+        I["AWS AURORA POSTGRESQL Dashboards and Alerts State"]
+    end
+    class I aurora;
+
+    %% --- PIPELINE CONNECTIONS (FLOWS) ---
+    A == "OTLP 4317 4318 HTTP /metrics" ==> B
     
-    B == "Mimir Push (8080)" ==> C
-    B == "Loki Push (80)" ==> D
-    B == "Tempo OTLP (4317)" ==> E
-    B == "Pyroscope Push (4040)" ==> F
+    B == "Mimir Push 8080" ==> C
+    B == "Loki Push 80" ==> D
+    B == "Tempo OTLP 4317" ==> E
+    B == "Pyroscope Push 4040" ==> F
     
-    C & D & E & F == "S3 API (443)" ==> G
+    %% --- CACHING MAPPINGS ---
+    C == "Cache Read/Write 11211" ==> CH
+    D == "Cache Read/Write 11211" ==> CH
+    E == "Cache Read/Write 11211" ==> CH
+    F == "Cache Read/Write 11211" ==> CH
     
-    H -. "Query/Alerting\nMimir(8080)/Loki(80)\nTempo(3100)/\nPyroscope(4040)" .-> C & D & E & F
+    %% --- COLD STORAGE MAPPINGS ---
+    C & D & E & F == "Miss? S3 API 443" ==> G
+    
+    %% --- USER QUERY & ALERTING CONTROL FLOW ---
+    H -. "Query / Alerting Mimir 8080 / Loki 80 / Tempo 3100 / Pyroscope 4040" .-> C & D & E & F
+    
+    %% --- GRAFANA FRONTEND PERSISTENCE FLOW ---
+    H == "Save Dashboards / Users / Session State 5432" ==> I
 ```
------------------------------------------------------
-
-### Add Cache Tiers (Production Optimization)The Issue: Fetching log lines or metric logs straight from AWS S3 buckets every time an engineer opens a Grafana dashboard introduces high query latency and increases AWS S3 read API costs.
-
-```mermaid
-graph LR
-    %% Define Highly Visible High-Contrast Bright Colors
-    classDef client fill:#D0FFFF,stroke:#00A0A0,stroke-width:3px,color:#000000;
-    classDef engine fill:#FF9100,stroke:#BF360C,stroke-width:4px,color:#FFFFFF;
-    classDef cache fill:#FFFF00,stroke:#F57F17,stroke-width:4px,color:#000000;
-    classDef storage fill:#00E676,stroke:#1B5E20,stroke-width:4px,color:#000000;
-
-    A["`**Grafana UI / Users**`"]
-    B["`**Mimir / Loki Queriers**`"]
-    C["`⚡ **AWS ElastiCache**`"]
-    D["`📦 **AWS S3 Buckets**(Cold Blocks)`"]
-
-    class A client; class B engine; class C cache; class D storage;
-
-    A == "1. Request Query" ==> B
-    B -. "2. Check In-Memory Cache" .-> C
-    B == "3. Miss - Fetch Object Chunks" ==> D
-    B -. "4. Populate Cache" .-> C
-```
-
 
 ### 📋 Operational Workflow Steps
 1. **Grafana Alloy** runs as a high-performance `DaemonSet` across all EKS worker nodes.
