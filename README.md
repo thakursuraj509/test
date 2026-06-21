@@ -46,48 +46,48 @@ Instead of running three different legacy agents (like Fluent Bit, Prometheus Ag
 
 ```mermaid
 graph TD
-    %% Define Highly Visible High-Contrast Bright Colors
-    classDef app fill:#D0FFFF,stroke:#00A0A0,stroke-width:3px;
-    classDef agent fill:#00E5FF,stroke:#006064,stroke-width:4px;
-    classDef backend fill:#FF9100,stroke:#BF360C,stroke-width:4px;
-    classDef storage fill:#FFFF00,stroke:#F57F17,stroke-width:4px;
-    classDef ui fill:#00E676,stroke:#1B5E20,stroke-width:4px;
+    %% Define High-Contrast, Vivid Colors with Overridden Text Styles
+    classDef app fill:#E0F7FA,stroke:#00ACC1,stroke-width:3px,color:#004D40,font-weight:bold,font-size:16px;
+    classDef agent fill:#00E5FF,stroke:#006064,stroke-width:4px,color:#000000,font-weight:bold,font-size:18px;
+    classDef backend fill:#FF9100,stroke:#BF360C,stroke-width:4px,color:#FFFFFF,font-weight:bold,font-size:16px;
+    classDef storage fill:#FFEA00,stroke:#F57F17,stroke-width:4px,color:#000000,font-weight:bold,font-size:18px;
+    classDef ui fill:#00E676,stroke:#1B5E20,stroke-width:4px,color:#000000,font-weight:bold,font-size:18px;
 
     %% --- 1. APPLICATION LAYER ---
-    subgraph AppLayer ["<span style='font-size:18px'><b>EKS WORKLOADS</b></span>"]
-        A["<span style='font-size:16px'><b>Application Pods & Microservices</b></span>"]
+    subgraph AppLayer [EKS WORKLOADS]
+        A["**Application Pods & Microservices**"]
     end
     class A app;
 
     %% --- 2. COLLECTION LAYER ---
-    subgraph CollectionLayer ["<span style='font-size:18px'><b>COLLECTION LAYER</b></span>"]
-        B["<span style='font-size:18px'><b>GRAFANA ALLOY DAEMONSET</b></span>"]
+    subgraph CollectionLayer [COLLECTION LAYER]
+        B["**GRAFANA ALLOY DAEMONSET**"]
     end
     class B agent;
 
     %% --- 3. STORAGE & PROCESSING BACKENDS ---
-    subgraph ProcessingLayer ["<span style='font-size:18px'><b>DISTRIBUTED PROCESSING ENGINES</b></span>"]
-        C["<span style='font-size:16px'><b>GRAFANA MIMIR <br> (METRICS)</b></span>"]
-        D["<span style='font-size:16px'><b>GRAFANA LOKI <br> (LOGS)</b></span>"]
-        E["<span style='font-size:16px'><b>GRAFANA TEMPO <br> (TRACES)</b></span>"]
-        F["<span style='font-size:16px'><b>GRAFANA PYROSCOPE <br> (PROFILES)</b></span>"]
+    subgraph ProcessingLayer [DISTRIBUTED PROCESSING ENGINES]
+        C["**GRAFANA MIMIR\n(METRICS)**"]
+        D["**GRAFANA LOKI\n(LOGS)**"]
+        E["**GRAFANA TEMPO\n(TRACES)**"]
+        F["**GRAFANA PYROSCOPE\n(PROFILES)**"]
     end
     class C,D,E,F backend;
 
     %% --- 4. COLD STORAGE ---
-    subgraph StorageLayer ["<span style='font-size:18px'><b>PERSISTENT STORAGE</b></span>"]
-        G["<span style='font-size:18px'><b>AWS S3 BUCKETS</b></span>"]
+    subgraph StorageLayer [PERSISTENT STORAGE]
+        G["**AWS S3 BUCKETS**"]
     end
     class G storage;
 
     %% --- 5. VISUALIZATION LAYER ---
-    subgraph VisualizationLayer ["<span style='font-size:18px'><b>USER INTERFACE</b></span>"]
-        H["<span style='font-size:18px'><b>GRAFANA UI CONTROL PANEL</b></span>"]
+    subgraph VisualizationLayer [USER INTERFACE]
+        H["**GRAFANA UI CONTROL PANEL**"]
     end
     class H ui;
 
     %% --- PIPELINE CONNECTIONS (FLOW) ---
-    A == "OTLP (4317/4318) <br> HTTP (/metrics)" ==> B
+    A == "OTLP (4317/4318) \n HTTP (/metrics)" ==> B
     
     B == "Mimir Push (8080)" ==> C
     B == "Loki Push (80)" ==> D
@@ -96,8 +96,9 @@ graph TD
     
     C & D & E & F == "S3 API (443)" ==> G
     
-    H -. "Query / Alerting <br> Mimir (8080) / Loki (80) / Tempo (3100) / Pyroscope (4040)" .-> C & D & E & F
+    H -. "Query / Alerting \n Mimir (8080) / Loki (80) \n Tempo (3100) / Pyroscope (4040)" .-> C & D & E & F
 ```
+
 
 
 ### 📋 Operational Workflow Steps
