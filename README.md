@@ -283,7 +283,8 @@ Mimir requires access to two distinct buckets: one for metrics time-series block
 ------------------------------
 2. Grafana Loki IAM Policy (loki-s3-policy.json)
 Loki requires read/write access to its structured log chunk storage bucket.
-```{
+```
+{
     "Version": "2012-10-17",
     "Statement": [
         {
