@@ -61,7 +61,7 @@ graph TD
 
     %% --- 2. COLLECTION LAYER ---
     subgraph CollectionLayer [COLLECTION LAYER]
-        B["GRAFANA ALLOY DAEMONSET"]
+        B["GRAFANA ALLOY\nDAEMONSET"]
     end
     class B agent;
 
@@ -82,7 +82,7 @@ graph TD
 
     %% --- 5. VISUALIZATION LAYER ---
     subgraph VisualizationLayer [USER INTERFACE]
-        H["GRAFANA UI CONTROL PANEL"]
+        H["GRAFANA UI\nCONTROL PANEL"]
     end
     class H ui;
 
