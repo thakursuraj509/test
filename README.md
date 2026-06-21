@@ -87,16 +87,16 @@ graph TD
     class H ui;
 
     %% --- PIPELINE CONNECTIONS (FLOW) ---
-    A == Exposes Telemetry ==> B
+    A == "OTLP (4317/4318) <br> HTTP (/metrics)" ==> B
     
-    B == Streams Metrics ==> C
-    B == Streams Logs ==> D
-    B == Streams Traces ==> E
-    B == Streams Profiles ==> F
+    B == "Mimir Push (8080)" ==> C
+    B == "Loki Push (80)" ==> D
+    B == "Tempo OTLP (4317)" ==> E
+    B == "Pyroscope Push (4040)" ==> F
     
-    C & D & E & F == Flushes Cold Blocks ==> G
+    C & D & E & F == "S3 API (443)" ==> G
     
-    H -. Queries Data & Evaluates Alerts .-> C & D & E & F
+    H -. "Query / Alerting <br> Mimir (8080) / Loki (80) / Tempo (3100) / Pyroscope (4040)" .-> C & D & E & F
 ```
 
 
@@ -106,12 +106,107 @@ graph TD
 3. Telemetry pipelines stream data elements across the local network directly to **Mimir**, **Loki**, **Tempo**, and **Pyroscope** distributor layers.
 4. Backends process real-time events in memory and commit long-term historical data blocks securely to isolated **AWS S3 buckets**.
 5. Engineers log into the **Grafana UI** to manipulate dashboards, run ad-hoc calculations, and maintain system alert paths.
-
-
-
 ------------------------------
+### Production AWS CLI Automation Script
+```
+#!/bin/bash
+set -e
+
+# ==============================================================================
+# CONFIGURATION CONSTANTS (Update to match your EKS deployment topology)
+# ==============================================================================
+AWS_REGION="us-east-1"
+BUCKETS=(
+  "eks-observability-mimir-blocks-placeholder"
+  "eks-observability-mimir-alertmanager-placeholder"
+  "eks-observability-loki-chunks-placeholder"
+  "eks-observability-tempo-traces-placeholder"
+  "eks-observability-pyroscope-profiles-placeholder"
+)
+
+echo "🛠️ Initializing AWS S3 Observability Storage Provisioner..."
+
+for BUCKET in "${BUCKETS[@]}"; do
+  echo "------------------------------------------------------------"
+  echo "🚀 Provisioning Bucket: ${BUCKET}"
+  echo "------------------------------------------------------------"
+
+  # 1. Create the base bucket (Handle regional configurations)
+  if [ "${AWS_REGION}" == "us-east-1" ]; then
+    aws s3api create-bucket \
+      --bucket "${BUCKET}" \
+      --region "${AWS_REGION}"
+  else
+    aws s3api create-bucket \
+      --bucket "${BUCKET}" \
+      --region "${AWS_REGION}" \
+      --create-bucket-configuration LocationConstraint="${AWS_REGION}"
+  fi
+  echo "  ✅ Base bucket created."
+
+  # 2. Enforce Object Ownership (Disable legacy ACLs - AWS Best Practice)
+  aws s3api put-bucket-ownership-controls \
+    --bucket "${BUCKET}" \
+    --ownership-controls="Rules=[{ObjectOwnership=BucketOwnerEnforced}]"
+  echo "  ✅ Object Ownership forced to BucketOwnerEnforced (ACLs Disabled)."
+
+  # 3. Apply strict Block Public Access settings
+  aws s3api put-public-access-block \
+    --bucket "${BUCKET}" \
+    --public-access-block-configuration \
+        "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
+  echo "  ✅ Block Public Access (BPA) universally enabled."
+
+  # 4. Enforce AES-256 Server-Side Encryption at Rest
+  aws s3api put-bucket-encryption \
+    --bucket "${BUCKET}" \
+    --server-side-encryption-configuration '{
+        "Rules": [{
+            "ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"}
+        }]
+    }'
+  echo "  ✅ Default AES-256 Server-Side Encryption applied."
+
+  # 5. Generate and apply explicit TLS/SSL-only Bucket Policy
+  POLICY_JSON=$(cat <<EOF
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "EnforceHTTPSOnly",
+            "Effect": "Deny",
+            "Principal": "*",
+            "Action": "s3:*",
+            "Resource": [
+                "arn:aws:s3:::${BUCKET}",
+                "arn:aws:s3:::${BUCKET}/*"
+            ],
+            "Condition": {
+                "Bool": {
+                    "aws:SecureTransport": "false"
+                }
+            }
+        }
+    ]
+}
+EOF
+)
+  aws s3api put-bucket-policy \
+    --bucket "${BUCKET}" \
+    --policy "${POLICY_JSON}"
+  echo "  ✅ Strict TLS/HTTPS-only data transmission policy enforced."
+
+done
+
+echo "============================================================"
+echo "🎉 SUCCESS: All 5 production observability S3 buckets secure!"
+echo "============================================================"
+```
+------------------------------
+
 Here is the complete, decoupled production architecture values suite. It incorporates your Private Harbor Registry, AWS IRSA (IAM Roles for Service Accounts), Gateway API (kgateways), Grafana Alloy, and the continuous profiling engine, Grafana Pyroscope. [1, 2] 
 Explicit dummy/placeholder labels are applied across all parameters to ensure safe replication inside your GitOps repository layout.
+
 ------------------------------
 ## Global Blueprint Placeholders
 
@@ -631,27 +726,151 @@ persistence:
 adminPassword: "YourHighlySecureProductionPasswordPlaceholder"
 env:
   GF_AUTH_ANONYMOUS_ENABLED: "false"
+
+# ==============================================================================
+# 1. CORE SMTP SERVER CONFIGURATION (Enables email dispatching)
+# ==============================================================================
+grafana.ini:
+  smtp:
+    enabled: true
+    host: "://example.com"              # Replace with your internal or cloud SMTP relay
+    user: "alerts-noreply@example.com"        # Sender authentication email account
+    password: "YourSmtpRelayAuthPassword"     # Secret application password string
+    skip_verify: false
+    from_address: "alerts-noreply@example.com"
+    from_name: "EKS Observability Cluster"
+
+  # ==============================================================================
+  # AZURE ENTRA ID SINGLE SIGN-ON (GENERIC OAUTH OIDC PIPELINE)
+  # ==============================================================================
+  auth.generic_oauth:
+    enabled: true
+    name: "Azure Entra ID"
+    allow_sign_up: true
+    icon: "microsoft"
+    
+    # Target Application Identification Credentials
+    client_id: "11111111-1111-1111-1111-111111111111"
+    client_secret: "Secret_Token_String_Value_Placeholder"
+    scopes: "openid profile email"
+    
+    # Modern Microsoft Entra ID V2 Endpoint Graph Structure
+    auth_url: "https://microsoftonline.com"
+    token_url: "https://microsoftonline.com"
+    api_url: "https://microsoft.com"
+    
+    # Enforce automated token identity validation constraints
+    use_pkce: true
+    
+    # AUTOMATED PRODUCTION ROLE MAPPING MESH
+    # If the user's email domain or login is validated, assign standard Viewer permissions by default
+    role_attribute_path: "'Viewer'"
+    
+    # Explicitly map Azure attributes to Grafana profiles
+    email_attribute_path: "mail || userPrincipalName"
+    name_attribute_path: "displayName"
+    login_attribute_path: "userPrincipalName"
+# ==============================================================================
+# 2. DECLARATIVE PROVISIONING FOR RULES & DISPATCH POLICIES
+# ==============================================================================
+alerting:
+  rules:
+    - orgId: 1
+      name: "Infrastructure-Alert-Rules"
+      rules:
+        # --- RULE EXAMPLE: CONTAINER CPU EXCEEDS 80% ---
+        - uid: "eks-node-cpu-high"
+          title: "Kubernetes Container CPU Utilization High"
+          condition: "B"  # References the Expression threshold check below
+          for: "2m"      # Pending grace window to prevent alert noise from small transient spikes
+          labels:
+            severity: "critical"
+            cluster: "production-eks"
+          annotations:
+            summary: "High CPU usage on pod {{ $labels.pod }}"
+            description: "The container {{ $labels.container }} in namespace {{ $labels.namespace }} has generated a CPU loading calculation of {{ $value }}% for over 2 minutes."
+            runbook_url: "https://example.com"
+          
+          # Query Pipeline definitions
+          data:
+            # Step A: Execute the raw PromQL mathematical data vector fetch
+            - refId: "A"
+              relativeTimeRange:
+                from: 300
+                to: 0
+              datasourceUid: "Prometheus-Mimir" # Matches your provisioned Mimir datasource tag
+              model:
+                expr: "sum(rate(container_cpu_usage_seconds_total{container!=''}[2m])) by (namespace, pod, container) * 100 / sum(kube_pod_container_resource_limits{resource='cpu'}) by (namespace, pod, container) > 80"
+                hide: false
+                intervalMs: 30000
+                maxDataPoints: 43200
+                refId: "A"
+            
+            # Step B: Evaluate criteria using reduction and threshold limits
+            - refId: "B"
+              datasourceUid: "-input-" # Evaluates data inside Grafana evaluation engine
+              model:
+                conditions:
+                  - evaluator:
+                      params: [80]
+                      type: "gt"  # Trigger if value is Greater Than 80%
+                    operator:
+                      type: "and"
+                    query:
+                      params: ["A"]
+                    reducer:
+                      params: []
+                      type: "last" # Evaluate the last metric value scraped
+                expression: ""
+                type: "classic_conditions"
+
+  # ==============================================================================
+  # 3. NOTIFICATION ROUTING & CONTACT DESTINATIONS
+  # ==============================================================================
+  contactPoints:
+    - orgId: 1
+      name: "Email-Alerting-Channel"
+      receivers:
+        - uid: "email-receiver-primary"
+          type: "email"
+          settings:
+            addresses: "devops-oncall@example.com;sre-team@example.com" # Semicolon separated destinations
+            singleEmail: false
+            disableResolveMessage: false # Sends a second follow-up note once CPU normalizes below 80%
+
+  notificationPolicies:
+    - orgId: 1
+      receiver: "Email-Alerting-Channel" # Set this channel as the global fallback target
+      group_by: ["alertname", "cluster", "namespace"]
+      group_wait: "30s"
+      group_interval: "5m"
+      repeat_interval: "4h"
+
+# ==============================================================================
+# 4. STANDARD DATASOURCES ATTACHMENT REFERENCE
+# ==============================================================================
 datasources:
   datasources.yaml:
     apiVersion: 1
     datasources:
     - name: Prometheus-Mimir
       type: prometheus
+      uid: "Prometheus-Mimir" # Explicit UID used to anchor your alert rule strings
       access: proxy
-      url: http://cluster.local
+      url: http://mimir-distributed-query-frontend.monitoring.svc.cluster.local:8080
       isDefault: true
     - name: Loki
       type: loki
       access: proxy
-      url: http://cluster.local
+      url: http://loki-distributed-gateway.monitoring.svc.cluster.local:80
     - name: Tempo
       type: tempo
       access: proxy
-      url: http://cluster.local
+      url: http://tempo-distributed-query-frontend.monitoring.svc.cluster.local:3100
     - name: Pyroscope
-      type: phlare # Core plugin layout identifier matching downstream Pyroscope engines
+      type: phlare
       access: proxy
-      url: http://cluster.local
+      url: http://pyroscope-distributed-query-frontend.monitoring.svc.cluster.local:4040
 ```
 ------------------------------
 # argocd-apps/app-grafana.yaml
@@ -687,47 +906,66 @@ Alloy is installed from the core repository and runs as a node-level pipeline. I
 ```
 global:
   image:
+    # Points cleanly to your internal mirror
     registry: ://example.com
     repository: observability-mirror/alloy
     tag: 1.1.1
+
 alloy:
+  # Deploys 1 replica pod on every active EKS worker node
   type: daemonset
-  clustering:
-    enabled: true
   
+  clustering:
+    enabled: true # Balance processing workloads natively across cluster node lines
+
+  # ==============================================================================
+  # DECLARATIVE RIVER RUNTIME PIPELINE CONFIGURATION
+  # ==============================================================================
   configMap:
     create: true
     content: |
+      // HIGH CARDINALITY SERVICE DISCOVERY ENGINE
       discovery.kubernetes "pods" {
         role = "pod"
       }
       
-      // 1. METRICS CONTROL BLOCK
+      // ==========================================================================
+      // 1. METRICS INGESTION BLOCK (PROMETHEUS SCOPE)
+      // ==========================================================================
       prometheus.scrape "kubernetes_pods" {
         targets    = discovery.kubernetes.pods.targets
         forward_to = [prometheus.remote_write.mimir.receiver]
       }
+
       prometheus.remote_write "mimir" {
         endpoint {
-          url = "http://cluster.local"
+          # Targets Mimir Distributor service over exact internal network FQDN
+          url = "http://mimir-distributed-distributor.monitoring.svc.cluster.local/api/v1/push"
         }
       }
 
-      // 2. LOG ROUTING PIPELINE
+      // ==========================================================================
+      // 2. LOG ROUTING PIPELINE BLOCK (LOKI SCOPE)
+      // ==========================================================================
       local.file_match "container_logs" {
         path_targets = [{"__path__" = "/var/log/pods/*/*/*.log"}]
       }
+
       loki.source.file "pods" {
         targets    = local.file_match.container_logs.targets
         forward_to = [loki.write.loki_backend.receiver]
       }
+
       loki.write "loki_backend" {
         endpoint {
-          url = "http://cluster.local"
+          # Streams compressed log lines straight to Loki's internal NGINX gateway on port 80
+          url = "http://loki-distributor.monitoring.svc.cluster.local/loki/api/v1/push"
         }
       }
 
-      // 3. OPENTELEMETRY TRACING CONTEXT
+      // ==========================================================================
+      // 3. DISTRIBUTED TRACING ENGINE BLOCK (OPENTELEMETRY SCOPE)
+      // ==========================================================================
       otelcol.receiver.otlp "otlp_receiver" {
         grpc { endpoint = "0.0.0.0:4317" }
         http { endpoint = "0.0.0.0:4318" }
@@ -736,24 +974,31 @@ alloy:
           traces  = [otelcol.exporter.otlp.tempo_backend.input]
         }
       }
+
       otelcol.exporter.otlp "tempo_backend" {
         client {
-          endpoint = "tempo-backend-distributor.monitoring.svc.cluster.local:4317"
+          # Pushes traces using high-performance gRPC directly to Tempo Distributor
+          endpoint = "tempo-distributed-distributor.monitoring.svc.cluster.local:4317"
           tls { insecure = true }
         }
       }
+
       otelcol.exporter.prometheus "mimir_otel" {
         forward_to = [prometheus.remote_write.mimir.receiver]
       }
 
-      // 4. CONTINUOUS PROFILING INTERCEPTOR
+      // ==========================================================================
+      // 4. CONTINUOUS APPLICATION PROFILING BLOCK (PYROSCOPE SCOPE)
+      // ==========================================================================
       pyroscope.scrape "ebpf" {
         targets    = discovery.kubernetes.pods.targets
         forward_to = [pyroscope.write.pyroscope_backend.receiver]
       }
+
       pyroscope.write "pyroscope_backend" {
         endpoint {
-          url = "http://cluster.local"
+          # Dispatches execution profile vectors straight to Pyroscope Distributor component
+          url = "http://pyroscope.monitoring.svc.cluster.local:4040"
         }
       }
 ```
